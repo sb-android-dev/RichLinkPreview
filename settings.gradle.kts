@@ -23,5 +23,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "RichLinkPreview"
-include(":app")
+include(":sample")
 include(":richlinkpreview")

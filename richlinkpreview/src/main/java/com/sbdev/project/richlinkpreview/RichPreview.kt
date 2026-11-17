@@ -1,157 +1,124 @@
 package com.sbdev.project.richlinkpreview
 
-import android.webkit.URLUtil
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
-import java.io.IOException
+import org.jsoup.nodes.Document
 import java.net.URI
-import java.net.URISyntaxException
 
-class RichPreview(
+/**
+ * Fetches a page with Jsoup and extracts its [MetaData].
+ *
+ * Compose callers should prefer [rememberRichLinkState] or [RichLinkPreview].
+ */
+public class RichPreview(
     private val responseListener: ResponseListener? = null
 ) {
-    var userAgent: String? = null
+    public var userAgent: String? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     /**
-     * Non-suspend version for legacy View-based usage.
-     * Uses the ResponseListener provided in the constructor.
+     * Callback version for non-coroutine callers. The result is delivered to the
+     * [ResponseListener] passed to the constructor, on the main thread.
      */
-    fun getPreview(url: String) {
+    public fun getPreview(url: String) {
         scope.launch {
             getPreviewSuspend(url)
         }
     }
 
-    fun getPreview(url: String, userAgent: String) {
+    public fun getPreview(url: String, userAgent: String) {
         this.userAgent = userAgent
         getPreview(url)
     }
 
     /**
-     * Suspend version for Compose/Coroutines usage.
-     * Returns MetaData directly.
+     * Suspend version. Returns the metadata, or `null` if the page could not be loaded.
+     * Also notifies the optional [ResponseListener].
      */
-    suspend fun getPreviewSuspend(url: String): MetaData? = withContext(Dispatchers.IO) {
-        val metaData = MetaData()
-        metaData.originalUrl = url
+    public suspend fun getPreviewSuspend(url: String): MetaData? {
+        val result = fetch(url)
+        withContext(Dispatchers.Main) {
+            result.fold(
+                onSuccess = { responseListener?.onData(it) },
+                onFailure = {
+                    responseListener?.onError(
+                        Exception("Could not load preview for $url: ${it.localizedMessage}", it)
+                    )
+                }
+            )
+        }
+        return result.getOrNull()
+    }
+
+    internal suspend fun fetch(url: String): Result<MetaData> = withContext(Dispatchers.IO) {
         try {
-            var connection = Jsoup.connect(url).timeout(30 * 1000)
-            userAgent?.let {
-                if (it.isNotBlank()) {
-                    connection = connection.userAgent(it)
-                }
-            }
-            val doc = connection.get()
-
-            var title = doc.select("meta[property=og:title]").attr("content")
-            if (title.isBlank()) {
-                title = doc.title()
-            }
-            metaData.title = title
-
-            var description = doc.select("meta[name=description]").attr("content")
-            if (description.isBlank())
-                description = doc.select("meta[name=Description]").attr("content")
-            if (description.isBlank())
-                description = doc.select("meta[property=og:description]").attr("content")
-            metaData.description = description
-
-            val imageElements = doc.select("meta[property=og:image]")
-            if (imageElements.size > 0) {
-                val image = imageElements.attr("content")
-                if (image.isNotEmpty()) {
-                    metaData.imageUrl = resolveURL(url, image)
-                }
-            }
-
-            if (metaData.imageUrl.isBlank()) {
-                val imageElement = doc.select("meta[name=og:image]")
-                if (imageElement.size > 0) {
-                    val image = imageElement.attr("content")
-                    if (image.isNotEmpty()) {
-                        metaData.imageUrl = resolveURL(url, image)
-                    }
-                }
-            }
-
-            if (metaData.imageUrl.isBlank()) {
-                var src = doc.select("link[rel=image_src]").attr("href")
-                if (src.isNotEmpty()) {
-                    metaData.imageUrl = resolveURL(url, src)
-                } else {
-                    src = doc.select("link[rel=apple-touch-icon]").attr("href")
-                    if (src.isNotEmpty()) {
-                        metaData.imageUrl = resolveURL(url, src)
-                        metaData.favicon = resolveURL(url, src)
-                    } else {
-                        src = doc.select("link[rel=icon]").attr("href")
-                        if (src.isNotEmpty()) {
-                            metaData.imageUrl = resolveURL(url, src)
-                            metaData.favicon = resolveURL(url, src)
-                        }
-                    }
-                }
-            }
-
-            var src = doc.select("link[rel=apple-touch-icon]").attr("href")
-            if (src.isNotEmpty()) {
-                metaData.favicon = resolveURL(url, src)
-            } else {
-                src = doc.select("link[rel=icon]").attr("href")
-                if (src.isNotEmpty()) {
-                    metaData.favicon = resolveURL(url, src)
-                }
-            }
-
-            val elements = doc.getElementsByTag("meta")
-            for (element in elements) {
-                if (element.hasAttr("property")) {
-                    val strProperty = element.attr("property").trim()
-                    if (strProperty == "og:url") {
-                        metaData.url = element.attr("content")
-                    }
-                    if (strProperty == "og:site_name") {
-                        metaData.siteName = element.attr("content")
-                    }
-                }
-            }
-
-            if (metaData.url.isBlank()) {
-                try {
-                    val uri = URI(url)
-                    metaData.url = uri.host ?: url
-                } catch (e: URISyntaxException) {
-                    metaData.url = url
-                }
-            }
-            
-            withContext(Dispatchers.Main) {
-                responseListener?.onData(metaData)
-            }
-            metaData
-        } catch (e: IOException) {
-            e.printStackTrace()
-            withContext(Dispatchers.Main) {
-                responseListener?.onError(Exception(
-                    "No Html Received from $url Check your Internet ${e.localizedMessage}"
-                ))
-            }
-            null
+            var connection = Jsoup.connect(url).timeout(TIMEOUT_MS)
+            userAgent?.takeIf { it.isNotBlank() }?.let { connection = connection.userAgent(it) }
+            Result.success(parse(connection.get(), url))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
-    private fun resolveURL(url: String, part: String): String {
-        if (URLUtil.isValidUrl(part)) {
-            return part
-        } else {
-            try {
-                val baseUri = URI(url)
-                return baseUri.resolve(part).toString()
-            } catch (e: Exception) {
-                e.printStackTrace()
+    internal companion object {
+        private const val TIMEOUT_MS = 30_000
+
+        /** Extracts [MetaData] from an already-loaded document. Pure, so it is unit-testable. */
+        fun parse(doc: Document, url: String): MetaData {
+            fun meta(selector: String) = doc.select(selector).attr("content")
+            fun link(rel: String) = doc.select("link[rel=$rel]").attr("href")
+
+            val title = meta("meta[property=og:title]").ifBlank { doc.title() }
+
+            val description = meta("meta[name=description]")
+                .ifBlank { meta("meta[name=Description]") }
+                .ifBlank { meta("meta[property=og:description]") }
+
+            val touchIcon = link("apple-touch-icon")
+            val icon = link("icon")
+            val faviconSrc = touchIcon.ifEmpty { icon }
+            val favicon = if (faviconSrc.isNotEmpty()) resolveURL(url, faviconSrc) else ""
+
+            val imageSrc = meta("meta[property=og:image]")
+                .ifEmpty { meta("meta[name=og:image]") }
+                .ifEmpty { link("image_src") }
+                .ifEmpty { faviconSrc }
+            val imageUrl = if (imageSrc.isNotEmpty()) resolveURL(url, imageSrc) else ""
+
+            var canonicalUrl = ""
+            var siteName = ""
+            for (element in doc.getElementsByTag("meta")) {
+                when (element.attr("property").trim()) {
+                    "og:url" -> canonicalUrl = element.attr("content")
+                    "og:site_name" -> siteName = element.attr("content")
+                }
             }
-            return ""
+            if (canonicalUrl.isBlank()) {
+                canonicalUrl = runCatching { URI(url).host }.getOrNull() ?: url
+            }
+
+            return MetaData(
+                url = canonicalUrl,
+                imageUrl = imageUrl,
+                title = title,
+                description = description,
+                siteName = siteName,
+                favicon = favicon,
+                originalUrl = url
+            )
+        }
+
+        private fun resolveURL(url: String, part: String): String {
+            val partUri = runCatching { URI(part) }.getOrNull()
+            if (partUri?.isAbsolute == true) return part
+            return runCatching { URI(url).resolve(part).toString() }.getOrDefault("")
         }
     }
 }

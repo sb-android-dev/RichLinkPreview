@@ -1,9 +1,9 @@
 package com.sbdev.project.richlinkpreview
 
-interface ViewListener {
+public interface ViewListener {
 
-    fun onSuccess(status: Boolean)
+    public fun onSuccess(status: Boolean)
 
-    fun onError(e: Exception)
+    public fun onError(e: Exception)
 
 }

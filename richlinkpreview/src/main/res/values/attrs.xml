@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="RichLinkView">
+        <!-- Card design. The order must match the RichLinkStyle enum.
+             ("default" is not allowed: aapt2 turns enum names into R.id fields.) -->
+        <attr name="richLinkStyle" format="enum">
+            <enum name="defaultStyle" value="0" />
+            <enum name="skype" value="1" />
+            <enum name="twitter" value="2" />
+            <enum name="telegram" value="3" />
+        </attr>
+    </declare-styleable>
+</resources>
