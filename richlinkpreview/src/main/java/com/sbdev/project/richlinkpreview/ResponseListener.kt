@@ -1,8 +1,8 @@
 package com.sbdev.project.richlinkpreview
 
-interface ResponseListener {
+public interface ResponseListener {
 
-    fun onData(metaData: MetaData)
+    public fun onData(metaData: MetaData)
 
-    fun onError(e: Exception)
+    public fun onError(e: Exception)
 }

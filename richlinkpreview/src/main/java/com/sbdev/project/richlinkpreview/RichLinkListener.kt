@@ -2,8 +2,8 @@ package com.sbdev.project.richlinkpreview
 
 import android.view.View
 
-interface RichLinkListener {
+public interface RichLinkListener {
 
-    fun onClicked(view: View, metaData: MetaData)
+    public fun onClicked(view: View, metaData: MetaData)
 
 }

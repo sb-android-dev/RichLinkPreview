@@ -1,12 +1,21 @@
 package com.sbdev.project.richlinkpreview
 
-data class MetaData(
-    var url: String = "",
-    var imageUrl: String = "",
-    var title: String = "",
-    var description: String = "",
-    var siteName: String = "",
-    var mediaType: String = "",
-    var favicon: String = "",
-    var originalUrl: String = ""
+import androidx.compose.runtime.Immutable
+
+/**
+ * Metadata extracted from a web page. Empty strings mean "not found".
+ *
+ * @property url Canonical URL from `og:url`, falling back to the host of [originalUrl].
+ * @property originalUrl The URL that was requested.
+ */
+@Immutable
+public data class MetaData(
+    val url: String = "",
+    val imageUrl: String = "",
+    val title: String = "",
+    val description: String = "",
+    val siteName: String = "",
+    val mediaType: String = "",
+    val favicon: String = "",
+    val originalUrl: String = ""
 )
