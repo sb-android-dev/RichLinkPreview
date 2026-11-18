@@ -13,7 +13,7 @@ Toolchain: Gradle 9.9 (wrapper), AGP 9.5, Kotlin 2.4, Gradle daemon JVM 21, Java
 
 SDK levels: both modules use `compileSdk = 37` (a plain integer, not the `compileSdk { release(...) }` block) and `minSdk = 24`. The sample sets `targetSdk = 37`.
 
-All dependency versions live in `gradle/libs.versions.toml`. Main library deps: Jsoup 1.24, Coil 2.7 (Compose), Picasso 2.71828 (Views), kotlinx-coroutines 1.11, Compose BOM 2026.09.00. The dependency snippet in `README.md` lists its own versions; keep it in sync with the catalog when upgrading.
+All dependency versions live in `gradle/libs.versions.toml`. Main library deps: Jsoup 1.24, Coil 2.7, kotlinx-coroutines 1.11, Compose BOM 2026.09.00.
 
 ## Commands
 
@@ -73,3 +73,12 @@ There is a single UI implementation, in Compose. XML users get the same cards th
 The library declares the `INTERNET` permission in its own manifest, so it merges into consuming apps.
 
 The sample app (`:sample`) `MainActivity` exercises every entry point: the built-in styles, the custom slot, `rememberRichLinkState` including the error case, and `RichLinkView` hosted through `AndroidView`.
+
+## Publishing
+
+The library is published to Maven Central as `io.github.sb-android-dev:richlinkpreview` with the `com.vanniktech.maven.publish` plugin. Coordinates are `GROUP`, `POM_ARTIFACT_ID` and `VERSION_NAME` in `gradle.properties`, and the POM details are in `richlinkpreview/build.gradle.kts`. Pushing a `v<VERSION_NAME>` tag runs `.github/workflows/publish.yml`, which tests, signs and releases. `PUBLISHING.md` has the full steps and the required secrets.
+
+- Signing is enabled only when `signingInMemoryKey` or `signing.keyId` is set, so `./gradlew :richlinkpreview:publishToMavenLocal` works without keys. Don't make signing unconditional.
+- Never put credentials or signing keys in the repo's `gradle.properties`; they come from environment variables in CI or from `~/.gradle/gradle.properties`.
+- When releasing, bump `VERSION_NAME` and the version in the README install snippet together.
+- `./gradlew :richlinkpreview:tasks` fails under AGP 9.5 (a Compose Preview task can't be created when every task is realized). It's unrelated to publishing; use `--dry-run` on a specific task to see its plan instead.
