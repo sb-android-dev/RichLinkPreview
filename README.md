@@ -13,18 +13,15 @@ A lightweight Android library that generates rich link previews, built with **Je
 
 ## Installation
 
-Add the following to your `build.gradle.kts` (Module: app):
+RichLinkPreview is published on Maven Central, so no extra repository is needed. Add it to your module's `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation(project(":richlinkpreview"))
-    
-    // Core dependencies used by the library
-    implementation("org.jsoup:jsoup:1.24.1")
-    implementation("io.coil-kt:coil-compose:2.7.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+    implementation("io.github.sb-android-dev:richlinkpreview:1.0.0")
 }
 ```
+
+Jsoup, Coil and kotlinx-coroutines come with the library automatically. Requires `minSdk` 24.
 
 ## Usage
 
